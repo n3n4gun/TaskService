@@ -1,0 +1,11 @@
+test.py
+package-lock.json
+package.json
+myvenv/
+task_file_structure_example.txt
+existed_users_file_structure.txt
+node_modules/
+json_files/
+models/__pycache__/
+service/__pycache__/
+socket-server/__pycache__/
