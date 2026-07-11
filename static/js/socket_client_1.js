@@ -37,7 +37,8 @@ const line = '\n' + '─'.repeat(70) + '\n';
 const doubleLine = '\n' + '═'.repeat(70) + '\n';
 const dottedLine = '\n' + '⋅'.repeat(70) + '\n';
 
-function printHeader(title, icon = '📌') {
+// Переопределяем printHeader чтобы не конфликтовал
+function printHeaderWithIcon(title, icon = '📌') {
     console.log(doubleLine);
     console.log(`${icon} ${title}`);
     console.log(line);
@@ -48,13 +49,13 @@ function printFooter() {
 }
 
 socket.on("user_connection", (data) => {
-    printHeader('ПОДКЛЮЧЕНИЕ К СЕРВЕРУ', '🔌');
+    printHeaderWithIcon('ПОДКЛЮЧЕНИЕ К СЕРВЕРУ', '🔌');
     console.log("Полученные данные при подключении:");
     console.log(JSON.stringify(data, null, 2));
     
     // Вывод информации о пользователе
     if (data.user_tasks !== undefined) {
-        console.log(`\n👤 Пользователь: fp.naboyshchikov`);
+        console.log(`\n👤 Пользователь: av.efimov`);
         console.log(`📋 Количество задач пользователя: ${data.user_tasks?.length || 0}`);
     }
     
@@ -67,7 +68,7 @@ socket.on("user_connection", (data) => {
 });
 
 socket.on("connect", () => {
-    printHeader('СОЕДИНЕНИЕ УСТАНОВЛЕНО', '✅');
+    printHeaderWithIcon('СОЕДИНЕНИЕ УСТАНОВЛЕНО', '✅');
     console.log(`   Socket ID: ${socket.id}`);
     console.log(`   Пользователь: av.efimov`);
     console.log(`   Сервер: http://127.0.0.1:8888`);
@@ -76,7 +77,7 @@ socket.on("connect", () => {
 });
 
 socket.on("connect_error", (err) => {
-    printHeader('ОШИБКА ПОДКЛЮЧЕНИЯ', '❌');
+    printHeaderWithIcon('ОШИБКА ПОДКЛЮЧЕНИЯ', '❌');
     console.log(`   Сообщение: ${err.message}`);
     console.log(`   Пользователь: av.efimov`);
     console.log(`   Время: ${new Date().toLocaleTimeString()}`);
@@ -84,14 +85,69 @@ socket.on("connect_error", (err) => {
 });
 
 socket.on("disconnect", () => {
-    printHeader('СОЕДИНЕНИЕ РАЗОРВАНО', '🔌');
+    printHeaderWithIcon('СОЕДИНЕНИЕ РАЗОРВАНО', '🔌');
     console.log(`   Пользователь: av.efimov`);
     console.log(`   Время: ${new Date().toLocaleTimeString()}`);
     printFooter();
 });
 
+// === НОВЫЙ ОБРАБОТЧИК ДЛЯ ОБНОВЛЕНИЯ СОСТОЯНИЯ ЗАДАЧ ===
+socket.on("tasks_states_update", (response) => {
+    printSeparator('🔄');
+    printHeader('ОБНОВЛЕНИЕ СОСТОЯНИЯ ЗАДАЧ', '🔄');
+    
+    console.log(`📢 Получено обновление от сервера!`);
+    console.log(`⏰ Время обновления: ${new Date().toLocaleTimeString()}`);
+    
+    const taskObject = response.active_tasks || response;
+    const taskCount = Object.keys(taskObject).length;
+    
+    console.log(`📊 Всего задач в системе: ${taskCount}`);
+    
+    if (taskCount > 0) {
+        console.log('\n📋 ТЕКУЩЕЕ СОСТОЯНИЕ ЗАДАЧ:');
+        console.log(dottedLine);
+        
+        Object.entries(taskObject).forEach(([id, task], index) => {
+            const statusIcon = task.task_state === 'accepted' ? '✓' : '○';
+            const statusText = task.task_state === 'accepted' ? 'В работе' : 'Ожидает';
+            const executorInfo = task.executor_id || 'не назначен';
+            
+            // Добавляем индикатор, если задача была только что принята
+            const justTaken = task.task_state === 'accepted' && executorInfo !== 'не назначен';
+            const takenIndicator = justTaken ? ' 🔄 НОВЫЙ ИСПОЛНИТЕЛЬ!' : '';
+            
+            console.log(`\n${index + 1}. 📌 ${task.task_name}${takenIndicator}`);
+            console.log(`   🆔 ID: ${id.substring(0, 8)}...${id.substring(id.length - 4)}`);
+            console.log(`   📝 Описание: ${task.task_description}`);
+            console.log(`   🔄 Статус: ${statusIcon} ${statusText}`);
+            console.log(`   👤 Исполнитель: ${executorInfo}`);
+            
+            if (index < taskCount - 1) {
+                console.log(dottedLine);
+            }
+        });
+        
+        console.log('\n' + dottedLine);
+        console.log(`📈 ИТОГО: ${taskCount} задач в системе`);
+        
+        // Подсчет статистики
+        const acceptedCount = Object.values(taskObject).filter(t => t.task_state === 'accepted').length;
+        const notAcceptedCount = taskCount - acceptedCount;
+        
+        console.log(`\n📊 СТАТИСТИКА:`);
+        console.log(`   ✓ В работе: ${acceptedCount}`);
+        console.log(`   ○ Ожидают: ${notAcceptedCount}`);
+    } else {
+        console.log('\n   📭 Нет активных задач в системе');
+    }
+    
+    printFooter();
+    printSeparator('🔄');
+});
+
 socket.on("new_task", (response) => {
-    printHeader('ОБНОВЛЕНИЕ СПИСКА ЗАДАЧ', '📦');
+    printHeaderWithIcon('ОБНОВЛЕНИЕ СПИСКА ЗАДАЧ', '📦');
     
     const taskObject = response.active_tasks || response;
     const taskCount = Object.keys(taskObject).length;
@@ -108,7 +164,6 @@ socket.on("new_task", (response) => {
             console.log(`   🆔 ID: ${id.substring(0, 8)}...${id.substring(id.length - 4)}`);
             console.log(`   📝 Описание: ${task.task_description}`);
             
-            // Статус с цветовым индикатором (текстовым)
             const statusIcon = task.task_state === 'accepted' ? '✓' : '○';
             const statusText = task.task_state === 'accepted' ? 'В работе' : 'Ожидает';
             console.log(`   🔄 Статус: ${statusIcon} ${statusText}`);
@@ -131,7 +186,7 @@ socket.on("new_task", (response) => {
 });
 
 function createTask(taskName, taskDescription) {
-    printHeader('СОЗДАНИЕ НОВОЙ ЗАДАЧИ', '📝');
+    printHeaderWithIcon('СОЗДАНИЕ НОВОЙ ЗАДАЧИ', '📝');
     console.log(`   👤 Пользователь: av.efimov`);
     console.log(`   📌 Название: ${taskName}`);
     console.log(`   📝 Описание: ${taskDescription}`);
@@ -150,7 +205,7 @@ function createTask(taskName, taskDescription) {
 }
 
 function takeTask(taskId) {
-    printHeader('ПРИНЯТИЕ ЗАДАЧИ В РАБОТУ', '🔧');
+    printHeaderWithIcon('ПРИНЯТИЕ ЗАДАЧИ В РАБОТУ', '🔧');
     console.log(`   👤 Пользователь: av.efimov`);
     console.log(`   🆔 ID задачи: ${taskId}`);
     console.log(`   📋 Действие: Принять в работу`);
@@ -170,7 +225,6 @@ socket.on("take_new_task", (userTasks) => {
     printSeparator('+');
     printHeader('ЗАДАЧА ПРИНЯТА В РАБОТУ', '+');
     
-    // 🔍 Отладка: выводим полученные данные
     console.log('\n🔍 ОТЛАДКА: Полученные данные от сервера:');
     console.log('Тип данных:', Array.isArray(userTasks) ? 'Array' : typeof userTasks);
     console.log('Содержимое:', JSON.stringify(userTasks, null, 2));
@@ -179,7 +233,6 @@ socket.on("take_new_task", (userTasks) => {
     let tasksArray = [];
     let taskCount = 0;
     
-    // Преобразуем данные в единый формат
     if (Array.isArray(userTasks)) {
         tasksArray = userTasks;
         taskCount = tasksArray.length;
@@ -204,7 +257,6 @@ socket.on("take_new_task", (userTasks) => {
         console.log('─'.repeat(50));
         
         tasksArray.forEach((task, index) => {
-            // Безопасное получение полей задачи
             const taskId = task.task_id || task.id || `task_${index}`;
             const taskName = task.task_name || task.name || task.title || `Задача ${index + 1}`;
             const taskDescription = task.task_description || task.description || 'Нет описания';
@@ -227,18 +279,67 @@ socket.on("take_new_task", (userTasks) => {
     printSeparator('+');
 });
 
-// Дополнительная функция для просмотра всех задач
+// Обработчик получения обновленного списка после возврата задачи
+socket.on("user_return_task", (response) => {
+    printSeparator('↩️');
+    printHeader('ЗАДАЧА ВОЗВРАЩЕНА', '↩️');
+    
+    console.log(`📢 Задача возвращена в общий пул!`);
+    console.log(`⏰ Время обновления: ${new Date().toLocaleTimeString()}`);
+    console.log(`👤 Пользователь: av.efimov`);
+    
+    const taskObject = response.active_tasks || response;
+    const taskCount = Object.keys(taskObject).length;
+    
+    console.log(`📊 Всего задач в системе: ${taskCount}`);
+    
+    if (taskCount > 0) {
+        console.log('\n📋 ОБНОВЛЕННЫЙ СПИСОК ЗАДАЧ:');
+        console.log(dottedLine);
+        
+        Object.entries(taskObject).forEach(([id, task], index) => {
+            const statusIcon = task.task_state === 'accepted' ? '✓' : '○';
+            const statusText = task.task_state === 'accepted' ? 'В работе' : 'Ожидает';
+            const executorInfo = task.executor_id || 'не назначен';
+            
+            console.log(`\n${index + 1}. 📌 ${task.task_name}`);
+            console.log(`   🆔 ID: ${id.substring(0, 8)}...${id.substring(id.length - 4)}`);
+            console.log(`   📝 Описание: ${task.task_description}`);
+            console.log(`   🔄 Статус: ${statusIcon} ${statusText}`);
+            console.log(`   👤 Исполнитель: ${executorInfo}`);
+            
+            if (index < taskCount - 1) {
+                console.log(dottedLine);
+            }
+        });
+        
+        console.log('\n' + dottedLine);
+        
+        // Статистика
+        const acceptedCount = Object.values(taskObject).filter(t => t.task_state === 'accepted').length;
+        const notAcceptedCount = taskCount - acceptedCount;
+        
+        console.log(`📊 СТАТИСТИКА:`);
+        console.log(`   ✓ В работе: ${acceptedCount}`);
+        console.log(`   ○ Ожидают: ${notAcceptedCount}`);
+    } else {
+        console.log('\n   📭 Нет активных задач в системе');
+    }
+    
+    printFooter();
+    printSeparator('↩️');
+});
+
 function showAllTasks() {
-    printHeader('ЗАПРОС ВСЕХ ЗАДАЧ', '🔍');
+    printHeaderWithIcon('ЗАПРОС ВСЕХ ЗАДАЧ', '🔍');
     console.log(`👤 Пользователь: av.efimov`);
     console.log(`⏳ Запрос списка всех задач...`);
     socket.emit("get_all_tasks");
     printFooter();
 }
 
-// Функция для завершения задачи
 function completeTask(taskId) {
-    printHeader('ЗАВЕРШЕНИЕ ЗАДАЧИ', '🎯');
+    printHeaderWithIcon('ЗАВЕРШЕНИЕ ЗАДАЧИ', '🎯');
     console.log(`   👤 Пользователь: av.efimov`);
     console.log(`   🆔 ID задачи: ${taskId}`);
     console.log(`   📋 Действие: Завершить задачу`);
@@ -251,42 +352,104 @@ function completeTask(taskId) {
     printFooter();
 }
 
-// Автоматическое создание задачи через 5 секунд
+function completeTask(taskId) {
+    printHeaderWithIcon('ЗАВЕРШЕНИЕ ЗАДАЧИ', '🎯');
+    console.log(`   👤 Пользователь: av.efimov`);
+    console.log(`   🆔 ID задачи: ${taskId}`);
+    console.log(`   📋 Действие: Завершить задачу`);
+    console.log(line);
+    console.log(`⏳ Отправка запроса на сервер...`);
+    
+    socket.emit("complete_task", { task_id: taskId });
+    
+    console.log(`✅ Запрос на завершение задачи отправлен!`);
+    console.log(`⏰ Время отправки: ${new Date().toLocaleTimeString()}`);
+    console.log(`💡 Ожидайте обновление списка задач...`);
+    printFooter();
+}
+
+function returnTask(taskId) {
+    printHeaderWithIcon('ВОЗВРАТ ЗАДАЧИ', '↩️');
+    console.log(`   👤 Пользователь: av.efimov`);
+    console.log(`   🆔 ID задачи: ${taskId}`);
+    console.log(`   📋 Действие: Вернуть задачу (не могу выполнить)`);
+    console.log(line);
+    console.log(`⏳ Отправка запроса на сервер...`);
+    
+    socket.emit("return_task", { task_id: taskId });
+    
+    console.log(`✅ Запрос на возврат задачи отправлен!`);
+    console.log(`⏰ Время отправки: ${new Date().toLocaleTimeString()}`);
+    console.log(`💡 Задача будет возвращена в общий пул`);
+    printFooter();
+}
+
+// Дополнительный обработчик для подтверждения завершения задачи (опционально)
+socket.on("task_completed", (data) => {
+    printSeparator('🏆');
+    printHeader('ЗАДАЧА ЗАВЕРШЕНА', '🏆');
+    
+    console.log(`✅ Задача успешно завершена!`);
+    console.log(`📝 Информация: ${JSON.stringify(data, null, 2)}`);
+    console.log(`⏰ Время завершения: ${new Date().toLocaleTimeString()}`);
+    
+    printFooter();
+    printSeparator('🏆');
+});
+
+// Обработчик ошибок при завершении задачи
+socket.on("complete_task_error", (error) => {
+    printSeparator('❌');
+    printHeader('ОШИБКА ЗАВЕРШЕНИЯ ЗАДАЧИ', '❌');
+    
+    console.log(`❌ Не удалось завершить задачу:`);
+    console.log(`   ${error.message || error}`);
+    
+    printFooter();
+    printSeparator('❌');
+});
+
+// Обработчик ошибки при возврате задачи
+socket.on("return_task_error", (error) => {
+    printSeparator('❌');
+    printHeader('ОШИБКА ВОЗВРАТА ЗАДАЧИ', '❌');
+    
+    console.log(`❌ Не удалось вернуть задачу:`);
+    console.log(`   ${error.message || error}`);
+    console.log(`💡 Совет: Возможно, задача уже не закреплена за вами`);
+    
+    printFooter();
+    printSeparator('❌');
+});
+
+
 setTimeout(() => {
-    createTask("Позвонить маме", "Узнать о здоровье");
+    createTask("Домашнее задание", "Выполнить домашнее задание по математике");
 }, 5000);
 
-// Пример: создать несколько задач с интервалами (раскомментируйте при необходимости)
 /*
 setTimeout(() => {
-    createTask("Купить продукты", "Молоко, хлеб, яйца");
-}, 10000);
-
-setTimeout(() => {
-    createTask("Сделать зарядку", "Утренняя зарядка 15 минут");
-}, 15000);
+    completeTask("ID_ЗАДАЧИ_ДЛЯ_ЗАВЕРШЕНИЯ");
+}, 60000);
 */
 
-// Принятие задачи (раскомментируйте для тестирования)
 /*
 setTimeout(() => {
-    takeTask("7ce7107bf798481eac2ce541dc858f35");
-}, 30000);
+    returnTask("ID_ЗАДАЧИ_ДЛЯ_ВОЗВРАТА");
+}, 60000);
 */
 
-// Информация о запуске клиента
 console.log('\n' + '█'.repeat(70));
 console.log('🚀 КЛИЕНТ ЗАПУЩЕН');
 console.log('═'.repeat(70));
-console.log(`👤 Пользователь: fp.naboyshchikov`);
+console.log(`👤 Пользователь: av.efimov`);
 console.log(`🔗 Сервер: http://127.0.0.1:8888`);
 console.log(`🆔 Socket ID: ${socket.id || 'ожидание подключения...'}`);
 console.log(`⏰ Время запуска: ${new Date().toLocaleString()}`);
 console.log('█'.repeat(70) + '\n');
 
-// Обработчик готовности к отправке команд
 socket.on("connect", () => {
-    console.log('\n💡 Доступные команды (вызовите в коде):');
+    console.log('\n💡 Доступные команды:');
     console.log('   createTask("название", "описание") - создать задачу');
     console.log('   takeTask("task_id") - принять задачу');
     console.log('   completeTask("task_id") - завершить задачу');

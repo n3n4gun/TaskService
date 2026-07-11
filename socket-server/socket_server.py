@@ -8,7 +8,6 @@ from loguru import logger
 root_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(root_dir))
 
-from models import User, Task
 from service import (
     UserService, TaskService
 )
@@ -74,26 +73,36 @@ async def user_take_task(sid, data):
 
     if task_service.user_take_task(user_id, task_id) and user_service.save_task_to_user(user_login, task_id):
         user_tasks = user_service.read_user_tasks(user_login)
-        logger.info(f'user: {user_id} take task: {task_id}')
+        logger.info(f'user: {user_login} take task: {task_id}')
         await socket_server.emit(
             event = 'take_new_task',
             data = user_tasks,
             to = sid
         )
 
-        # продумать функцию ниже...как лучше отправлять другим пользователям информацию о том, что
-        # клиент взял задачу в работу
-        # НАДО ЛИ ЭТО ВООБЩЕ ДЕЛАТЬ?
-        # по сути остальным клиентам просто рассылается обновленнное состояние списка задач
-
         active_tasks = task_service.read_all_tasks()
         await socket_server.emit(
             event = 'tasks_states_update',
             data = active_tasks,
-        )   # рассылка пользователям обновленные сведения о задачах
-            # то, что задача была кем то принята
+        )
     else:
         logger.warning(f'user: {user_login} tries to take busy task: {task_id}')
+
+@socket_server.on('complete_task')
+async def complete_task(sid, data):
+    task_id = data['task_id']
+
+    async with socket_server.session(sid = sid) as user_session:
+        user_login = user_session.get('user_login')
+
+    if user_service.user_complete_task(user_login, task_id) and task_service.delete_completed_task(task_id):
+        active_tasks = task_service.read_all_tasks()
+        await socket_server.emit(
+            event = 'tasks_states_update',
+            data = active_tasks,
+        )
+
+        logger.info(f'User: {user_login} complete task: {task_id}')
 
 @socket_server.on('return_task')                        # СОБЫТИЕ - пользователь не смог выполнить задачу, поэтому он возвращает ее
 async def user_return_task(sid, data):
@@ -101,6 +110,15 @@ async def user_return_task(sid, data):
 
     async with socket_server.session(sid = sid) as user_session:
         user_login = user_session.get('user_login')
+
+    if user_service.user_return_task(user_login, task_id) and task_service.user_return_task(task_id):
+        active_tasks = task_service.read_all_tasks()
+        await socket_server.emit(
+            event = 'user_return_task',
+            data = active_tasks
+        )
+
+        logger.info(f'User: {user_login} return task: {task_id}')
 
 @socket_server.event
 async def disconnect(sid, reason):

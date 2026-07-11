@@ -9,3 +9,4 @@ json_files/
 models/__pycache__/
 service/__pycache__/
 socket-server/__pycache__/
+conf/
